@@ -122,7 +122,7 @@ void* _sys_pmm_alloc_page(int number){
         if(startPage != -1 && page-startPage+1>=cnt){
             for(int i=startPage;i<startPage+cnt;i++){
                 update_bitmap(i,true);
-                cli_printf("allocated : %d, page : %d\n", (i * PAGE_SIZE), i);
+                // cli_printf("allocated : %d, page : %d\n", (i * PAGE_SIZE), i);
             }
             return (void*)(uintptr_t)(startPage * PAGE_SIZE);
         }

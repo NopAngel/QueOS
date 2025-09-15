@@ -15,6 +15,8 @@ extern void init_cli_screen();
 
 
 
+ModuleList module_list;
+AppList app_list;
 
 
 
@@ -26,14 +28,6 @@ typedef struct{
 }multiboot_tag_module;
 
 
-
-
-
-
-
-
-
-AppList app_list;
 
 
 void kernel_main(uint32_t magic, uint32_t addr) {
@@ -55,7 +49,7 @@ void kernel_main(uint32_t magic, uint32_t addr) {
     enable_interrupts();
 
 
-    app_list.count = 0;
+    module_list.count = 0;
     // cli_printf("Loading modules...\n");
 
     while (tag->type != MULTIBOOT_TAG_TYPE_END) {
@@ -65,16 +59,17 @@ void kernel_main(uint32_t magic, uint32_t addr) {
             
             cli_printf("Loaded module: %s, from %d kb to %d kb\n", &(module->cmdline[0]), byteToKB(module->mod_start), byteToKB(module->mod_end));
             _sys_pmm_reserve_range((void*)module->mod_start, (void*)module->mod_end);
-
-            app_list.apps[app_list.count].base = module->mod_start;
-            app_list.apps[app_list.count].size = module->mod_end - module->mod_start;
-            app_list.apps[app_list.count].name = &(module->cmdline[0]);
-            // cli_printf("%s\n", app_list.apps[app_list.count].name);
-            app_list.count++;
+        
+            module_list.apps[module_list.count].base = module->mod_start;
+            module_list.apps[module_list.count].size = module->mod_end - module->mod_start;
+            module_list.apps[module_list.count].name = &(module->cmdline[0]);
+            // cli_printf("%s\n", module_list.apps[module_list.count].name);
+            module_list.count++;
         }
         tag = (multiboot_tag*)((uint8_t*)tag + ((tag->size + 7) & ~7));
     }
-
+    
+    app_list.count = 0;
 
 
     // finally go to cli stuff

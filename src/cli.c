@@ -2,16 +2,30 @@
 #include "./kernel/drivers/display/display.h"
 #include "kernel/drivers/keyboard/keyboard.h"
 #include "kernel/memory/memory.h"
+#include "kernel/memory/vmm.h"
 #include "cliutils.h"
 #include "kernel/loader/elf.h"
+#include "kernel/usermode/appentry.h"
 
 
 void print_meminfo();
 void launchApp();
+void dump_gdt();
+
+struct screen scr;
+struct __attribute__((packed)) gdtr {
+    uint16_t limit;
+    uint32_t base;
+};
+
+extern uint8_t GDT_Start[];
+extern uint8_t GDT_End[];
+extern struct gdtr GDT_Descriptor;
 
 extern ScreenInfo _SYS_ScreenInfo;
-extern AppList app_list;  
-struct screen scr;
+extern ModuleList module_list;  
+extern AppList app_list;
+
 
 
 void virtual_putc(char c){
@@ -103,6 +117,9 @@ void cli_main(){
         else if(strcmp(buffer, "app1\n") == 0){
             cli_printf("Launching application...\n");
             launchApp();
+        }else if(strcmp(buffer, "dumpgdt\n") == 0){
+            dump_gdt();
+            cli_printf("\n");
         }
         else if(strcmp(buffer, "meminfo\n")==0){
             print_meminfo();
@@ -125,10 +142,18 @@ void cli_main(){
             else if (strncmp(ptr+1, "interrupt", 9) == 0){
                 cli_printf("Simulating interrupt...\n");
                 asm volatile (
-                    "int $0x3" 
+                    "int $0x35" 
                 );
-                
-            }else{
+
+            }else if (strncmp(ptr+1, "vmm", 3) == 0){
+                uint32_t *pd=_sys_create_pageDirectory();
+                // char *randomAddr=(char*)0x12345000;
+                _sys_load_page_directory((uint32_t)pd);
+                // randomAddr=(char*)0x12345000;
+                // call app
+                while(1);
+            }
+            else{
                 cli_printf("Unsupported test command: ");
                 cli_printf(ptr);
             }
@@ -157,6 +182,45 @@ void cli_main(){
             cli_printf("\n");
         }
         buffer[0] = '\0'; 
+    }
+}
+
+
+
+
+
+void dump_gdt() {
+    uint16_t limit = GDT_Descriptor.limit;
+    uint32_t base  = GDT_Descriptor.base;
+
+    cli_printf("GDT Base:  %x\n", base);
+    cli_printf("GDT Limit: %x (%u bytes)\n\n", limit, (unsigned)limit + 1);
+
+    int entries = (limit + 1) / 8;  // each entry = 8 bytes
+    // for (int i = 0; i < entries; i++) {
+    //     uint64_t desc = *(uint64_t *)(base + i * 8);
+    //     cli_printf("GDT[%d] = %x\n", i, (unsigned long long)desc);
+    // }
+    for (int i = 0; i < entries; i++) {
+        uint64_t desc = *(uint64_t *)(base + i * 8);
+
+        // Extract fields
+        uint16_t limit_low   = desc & 0xFFFF;
+        uint16_t base_low    = (desc >> 16) & 0xFFFF;
+        uint8_t  base_mid    = (desc >> 32) & 0xFF;
+        uint8_t  access      = (desc >> 40) & 0xFF;
+        uint8_t  gran_limit  = (desc >> 48) & 0xFF;
+        uint8_t  base_high   = (desc >> 56) & 0xFF;
+
+        uint32_t base_full   = base_low | (base_mid << 16) | (base_high << 24);
+        uint32_t limit_full  = limit_low | ((gran_limit & 0x0F) << 16);
+        uint8_t  flags       = (gran_limit >> 4) & 0x0F;
+
+        // Print nicely
+        cli_printf("GDT[%d]: raw=0x%016llx\n", i, (long long)desc);
+        cli_printf("  Base=%x  Limit=%x\n", base_full, limit_full);
+        cli_printf("  Access=%b  Flags=%x\n", access, flags);
+        cli_printf("\n");
     }
 }
 
@@ -224,15 +288,29 @@ void print_meminfo(){
 
 
 void launchApp(){   
-    void (*entry)(void) = NULL;
-    _sys_load_module_app(app_list.apps[0].base, app_list.apps[0].base + app_list.apps[0].size,
-                            app_list.apps[0].name, &entry);
-    if (entry) {
-        cli_printf("Launching application: %s\n", app_list.apps[0].name);
+    app_list.apps[app_list.count].module = &module_list.apps[0];
+    // app_list.apps[app_list.count].vmm = _sys_vmm_create_context();
+    app_list.apps[app_list.count].entry = NULL;
+    
+    int status = _sys_load_module_app(
+        module_list.apps[0].base, 
+        module_list.apps[0].base + module_list.apps[0].size,
+        module_list.apps[0].name, 
+        &(app_list.apps[app_list.count].entry)
+    );
+
+    
+    if (app_list.apps[app_list.count].entry) {
+        cli_printf("Launching application: %s\n", module_list.apps[0].name);
         cli_printf("======================\n\n");
-        entry();
+        // app_list.apps[app_list.count].entry();
+        // app_list.count++;
+        start_user_program((uint32_t)app_list.apps[app_list.count].entry);
+        // should never return here
+        cli_printf("\n======================\n");
     } else {
-        cli_printf("Failed to launch application: %s\n", app_list.apps[0].name);
+        cli_printf("Failed to launch application: %s\n", module_list.apps[0].name);
+        cli_printf("error : %d\n", status);
     }
     cli_printf("\n");
 }

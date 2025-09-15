@@ -93,7 +93,7 @@ link: build apps
 grub2: link
 	mkdir -p $(ISO_DIR)/boot/grub
 	cp ./grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
-	grub2-mkrescue -o $(BUILD_DIR)/os.iso $(ISO_DIR)
+	grub2-mkrescue -o $(BUILD_DIR)/queos.iso $(ISO_DIR)
 
 
 
@@ -103,11 +103,11 @@ grub2: link
 #------------------#
 
 run: always link grub2
-	qemu-system-i386 -cdrom $(BUILD_DIR)/os.iso 
+	qemu-system-i386 -cdrom $(BUILD_DIR)/queos.iso 
 
 
 debug: always link grub2
-	qemu-system-i386 -cdrom $(BUILD_DIR)/os.iso -s -S
+	qemu-system-i386 -cdrom $(BUILD_DIR)/queos.iso -s -S
 
 
 clean:

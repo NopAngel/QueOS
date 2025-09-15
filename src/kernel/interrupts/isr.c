@@ -5,15 +5,22 @@
 
 
 ISR_Handler g_ISRHandlers[256];
+extern void switch_to_kernel();
 
 
-
-static void __sys_print(ISR_StackFrame* regs){
-    cli_printf("%s", regs->ebx);
+static void usr_handler(ISR_StackFrame* regs){
+    // a=1 ; print
+    // a=80; exit
+    if(regs->eax==1)
+        cli_printf("%s", regs->ebx);
+    else if(regs->eax==60){
+        switch_to_kernel();
+    }else
+        cli_printf("Unknown syscall: %d \n", regs->eax);
 }
 
 static void default_ISR_handlers(){
-    set_ISR_Handler(128, __sys_print);
+    set_ISR_Handler(128, usr_handler);
 }
 
 
@@ -27,10 +34,29 @@ static void default_ISR_handlers(){
 void isr_common_handler(ISR_StackFrame* frame) {
     int int_no = frame->int_no;
 
-    // if(int_no<32) {
-    //     asm volatile("cli");
-    //     asm volatile("hlt");
-    // }
+    if(int_no<32) {
+        while(1);
+        switch (int_no) {
+            case 0: cli_printf("Division by zero error\n"); break;
+            case 1: cli_printf("Debug exception\n"); break;
+            case 2: cli_printf("Non-maskable interrupt\n"); break;
+            case 3: cli_printf("Breakpoint\n"); break;
+            case 4: cli_printf("Overflow\n"); break;
+            case 5: cli_printf("Bounds check error\n"); break;
+            case 6: cli_printf("Invalid opcode\n"); break;
+            case 7: cli_printf("Device not available\n"); break;
+            case 8: cli_printf("Double fault\n"); break;
+            case 9: cli_printf("Coprocessor segment overrun\n"); break;
+            case 10: cli_printf("Invalid TSS\n"); break;
+            case 11: cli_printf("Segment not present\n"); break;
+            case 12: cli_printf("Stack fault\n"); break;
+            case 13: cli_printf("General protection fault\n"); break;
+            case 14: cli_printf("Page fault\n"); break;
+            case 15: cli_printf("Reserved\n"); break;
+        }
+        asm volatile("cli");
+        asm volatile("hlt");
+    }
     
     if(g_ISRHandlers[int_no]!=NULL){
         g_ISRHandlers[int_no](frame);
@@ -326,6 +352,7 @@ void set_ISR_Handler(int int_no, ISR_Handler handler) {
 
 void _sys_init_ISR() {
     int flag = IDT_FLAG_GATE_INTERRUPT | IDT_FLAG_RING_0 | IDT_FLAG_PRESENT;
+    int syscall_flag = IDT_FLAG_GATE_INTERRUPT | IDT_FLAG_RING_3 | IDT_FLAG_PRESENT;
     uint16_t CODE_SEG = 0x08;
     _IDT_SetEntry(0, (uint32_t)ISR_0, CODE_SEG, flag);
     _IDT_SetEntry(1, (uint32_t)ISR_1, CODE_SEG, flag);
@@ -455,7 +482,7 @@ void _sys_init_ISR() {
     _IDT_SetEntry(125, (uint32_t)ISR_125, CODE_SEG, flag);
     _IDT_SetEntry(126, (uint32_t)ISR_126, CODE_SEG, flag);
     _IDT_SetEntry(127, (uint32_t)ISR_127, CODE_SEG, flag);
-    _IDT_SetEntry(128, (uint32_t)ISR_128, CODE_SEG, flag);
+    _IDT_SetEntry(128, (uint32_t)ISR_128, CODE_SEG, syscall_flag);
     _IDT_SetEntry(129, (uint32_t)ISR_129, CODE_SEG, flag);
     _IDT_SetEntry(130, (uint32_t)ISR_130, CODE_SEG, flag);
     _IDT_SetEntry(131, (uint32_t)ISR_131, CODE_SEG, flag);

@@ -14,6 +14,11 @@
 
 extern char __kernel_start[];
 extern char __kernel_end[];
+extern struct _vmm_context;
+typedef struct _vmm_context vmmContext;
+
+extern uint32_t saved_kernel_sp;
+
 
 enum MultibootTags {
     MULTIBOOT2_MAGIC = 0x36d76289,
@@ -22,6 +27,17 @@ enum MultibootTags {
     MULTIBOOT_TAG_TYPE_MODULE = 3,
     MULTIBOOT_TAG_TYPE_MMAP = 6,
     MULTIBOOT_TAG_TYPE_FRAMEBUFFER = 8,
+};
+
+enum PageFlags {
+    PAGE_PRESENT   = 0b00000001,
+    PAGE_RW        = 0b00000010,
+    PAGE_USER      = 0b00000100
+};
+
+enum Page{
+    PAGE_SIZE      = 4096,
+    PAGE_ENTRIES   = (PAGE_SIZE / 4)
 };
 
 typedef struct {
@@ -49,12 +65,27 @@ typedef struct{
     char *name;
     uint64_t base;
     uint64_t size;
-} ModuleApp;
+} Module;
 
 typedef struct{
-    ModuleApp apps[16];
+    Module apps[16];
+    int count;
+} ModuleList;
+
+
+typedef struct{
+    Module *module;
+    vmmContext *vmm;
+    uint32_t user_stack;
+    void (*entry)(void);
+} AppContext;
+
+typedef struct{
+    AppContext apps[16];
     int count;
 } AppList;
+
+
 
 
 
